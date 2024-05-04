@@ -1,0 +1,2 @@
+POST http://localhost:5001/telegram/create-group
+content-type: application/json

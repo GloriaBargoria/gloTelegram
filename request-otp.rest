@@ -1,0 +1,7 @@
+POST http://localhost:5001/telegram/verify
+content-type: application/json
+
+{
+    "phoneNumber": "+254795029709",
+    "code": "32343"
+}
