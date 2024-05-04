@@ -5,6 +5,9 @@ const input = require("input");
 const fs = require("fs");
 const { client } = require("../../config");
 
+
+// request OTP 
+// The OTP will be sent to your telegram account from the Official telegram account
 const getTelegramLogin = async (req, res) => {
   const { phoneNumber, password } = req.body;
 
@@ -24,6 +27,9 @@ const getTelegramLogin = async (req, res) => {
   })();
 };
 
+
+// verify OTP from the login code received at the auth.sendCode request
+// the phonecodeHash is in the response body of the auth.sendCode request
 const getTelegramOtp = async (req, res) => {
   console.log(req.body);
   const { code, phoneNumber, phoneCodeHash, password } = req.body;
@@ -60,6 +66,9 @@ const getTelegramOtp = async (req, res) => {
   }
 };
 
+
+// using the phonecodeHash from the auth.sendCode request, request another OTP if the first expired
+// then use the new code in the verify otp request
 const resendCode = async (req, res) => {
   console.log(req.body);
   const { code, phoneNumber } = req.body;
@@ -80,6 +89,9 @@ const resendCode = async (req, res) => {
   }
 };
 
+
+// When verify OTP limit is reached, use this endpoint to login on the serverside
+// This is purely for testing purposes and cannot be used by users
 const serversideLogin = async (req, res) => {
   (async () => {
     await client.start({
@@ -102,7 +114,7 @@ const serversideLogin = async (req, res) => {
         phone: user.phone,
       });
 
-      // Save newGroup to the database
+      // Save newUser to the database
       await newUser.save();
 
       res.status(200).json(newUser);

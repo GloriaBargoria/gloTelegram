@@ -4,8 +4,8 @@ const StringSession = require("telegram/sessions").StringSession;
 const path = require("path");
 const fs = require("fs");
 
-const apiId = 25939296;
-const apiHash = "2d3f19af9d061574732e83b6d260cd07";
+const apiId = process.env.TELEGRAM_API_ID;
+const apiHash = process.env.TELEGRAM_API_HASH;
 
 // let stringSession = new StringSession(
 //   "1BAAOMTQ5LjE1NC4xNjcuOTEAUK0Fyma4f/A+9dmkRxiFp0CzGuWsxHMeQ+lqyOovXOdlCQ/l7EZr4P3WodYz02KhkBOyMWX7iS2juVG+qDy8Ng9WboM5ZpHMEj6fZHCNrXzLQqjvdqLD1utmt7tN/KkqLp4oHXzi5jAk2VsC/xIwlVpm90PEYU45WufFFJVEJfWttQ3q5gq/lBM5G2X1GqLxIdqOHGVpn9J9FfP277VJIdNjx+Ir3wdAQFd493FFfzO13sfFo+KexV7jpFh1yFF3LEEdJzS7YnnYB44KAti0gaFclViE0ESc09poIb2gI+inKc1QDIDqZlvmTUro7cTYxMsNnLCqoY8V8q007IRlWJg="
@@ -24,13 +24,11 @@ const client = new TelegramClient(stringSession, apiId, apiHash, {
   connectionRetries: 5,
 });
 
-// console.log(stringSession, "old session");  
 
 module.exports = {
-  port: process.env.PORT || 5001,
+  port: process.env.PORT || 5000,
   mongoURI:
-    process.env.MONGODB_URI ||
-    "mongodb+srv://gloria:Gloria123@cluster0.11p1tki.mongodb.net/",
+    process.env.MONGODB_URI,
   client,
 };
 

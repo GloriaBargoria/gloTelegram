@@ -51,6 +51,9 @@ const joinChannel = async (req, res) => {
   }
 };
 
+// Add a user to your chatgroup
+// The user must be  a mutual contact to be added to chat
+// A mutual contact is a contact that appears in both user's contact list i.e they have saved your(sender's) number and you(sender) has saved theirs
 const addChatUser = async (req, res) => {
   try {
     (async function run() {
@@ -72,10 +75,9 @@ const addChatUser = async (req, res) => {
   }
 };
 
-//6626480698641016735n   2049370604n
-// -7697475128525692911n
-// Integer { value: 2140435584n }
 
+// Create a group and add yourself in it
+// To add more users in the creation process, pass their ids in the users array
 const createChat = async (req, res) => {
   try {
     (async function run() {
@@ -94,6 +96,8 @@ const createChat = async (req, res) => {
   }
 };
 
+
+
 // get all groups from DB
 const getAllGroups = async (req, res) => {
   try {
@@ -103,6 +107,43 @@ const getAllGroups = async (req, res) => {
   } catch (error) {
     console.error("Error getting groups:", error);
     res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// get nearby groups
+// This is used to get groups by location
+const getNearbyGroups = async (req) => {
+  // Extract latitude, longitude, and maxDistance from query parameters
+  const { latitude, longitude } = req.query;
+  try {
+    // Define query pipeline for geospatial query
+    const pipeline = [
+      {
+        $geoNear: {
+          near: {
+            type: 'Point',
+            // Coordinates in [longitude, latitude] order
+            coordinates: [longitude, latitude] 
+          },
+          // Calculate distance to each group
+          distanceField: 'distance',
+          // Maximum distance in meters
+          // Setting it to a hard-coded value to always get groups within 10kn radius
+          // Pass it as a query param for a more flexible request eg bigger or smallet distances
+          maxDistance: 10000, 
+          // Use spherical geometry for Earth-like calculations
+          spherical: true 
+        }
+      }
+    ];
+
+    // Perform aggregation query
+    const nearbyGroups = await GroupModel.aggregate(pipeline);
+
+    return nearbyGroups;
+  } catch (error) {
+    console.error('Error getting nearby groups:', error);
+    throw error;
   }
 };
 
@@ -129,4 +170,5 @@ module.exports = {
   createChat,
   getAllGroups,
   getGroupById,
+  getNearbyGroups
 };
