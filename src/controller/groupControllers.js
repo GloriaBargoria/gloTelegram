@@ -1,9 +1,6 @@
 const GroupModel = require("../models/groupSchema");
 const { client } = require("../../config");
 const { Api } = require("telegram");
-// const { Client } = require("tdl");
-// const { TDLib } = require("tdl-tdlib-addon");
-// const fs = require("fs");
 const tdl = require("tdl");
 const { getTdjson } = require("prebuilt-tdlib");
 
@@ -17,18 +14,18 @@ const tdclient = tdl.createClient({
   apiHash: apiHash,
 });
 
-const tdLoginUser = async() => {
-  try{
-    await tdclient.connect()
-    await tdclient.login()
-  }catch(err){
+const tdLoginUser = async () => {
+  try {
+    await tdclient.connect();
+    await tdclient.login();
+  } catch (err) {
     res.status(500).json({ error: err });
     throw err;
   }
-
-}
+};
 
 const tdCreateChat = async (req, res) => {
+  const {title, latitude, longitude, username, description} = req.body
   try {
     await tdclient.connect();
     await tdclient.login();
@@ -36,29 +33,25 @@ const tdCreateChat = async (req, res) => {
     // create supergroup
     const result = await tdclient.invoke({
       _: "createNewSupergroupChat",
-      description: "This is a supergroup",
-      title: "Group geolocation geolocation",
+      description: description,
+      title: title,
       location: {
         _: "chatLocation",
-        latitude: 0.35089145199977306,
-        longitude: 35.353372868941264,
+        latitude: latitude,
+        longitude: longitude,
       },
     });
 
-    console.log("Group created:::::::::::", result);
-    // const chatId = result.chat_id
     const chatId = result.type.supergroup_id;
 
-    console.log("supergroup id ::::::::::::::", chatId);
 
     // Set a public username to make the supergroup public
     const setUsernameResult = await tdclient.invoke({
       _: "setSupergroupUsername",
       supergroup_id: chatId,
-      username: "geolocation_unique", // Choose a unique username
+      username:username, // Choose a unique username
     });
 
-    console.log("Supergroup public:", setUsernameResult);
 
     const privacyResult = await tdclient.invoke({
       _: "toggleSupergroupJoinByRequest",
@@ -66,9 +59,8 @@ const tdCreateChat = async (req, res) => {
       join_by_request: true,
     });
 
-    console.log("Join requests enabled:", privacyResult);
 
-    res.status(200).json({ group: result, privacy: privacyResult });
+    res.status(200).json({ group: result, privacy: privacyResult, username: setUsernameResult });
   } catch (err) {
     res.status(500).json({ error: err });
     throw err;
@@ -76,17 +68,11 @@ const tdCreateChat = async (req, res) => {
 };
 
 const tdJoinChatRequest = async (req, res) => {
+  const { inviteLink } = req.body;
   try {
     await tdclient.connect();
     await tdclient.login();
 
-    const user = await tdclient.invoke({
-      _: "getMe",
-    });
-
-    console.log("user::::::::::", user);
-
-    const userId = user.id;
 
     // Send join request
     const joinRequestResult = await tdclient.invoke({
@@ -102,34 +88,29 @@ const tdJoinChatRequest = async (req, res) => {
 };
 
 const tdGetNearbyGroups = async (req, res) => {
+  const { latitude, longitude, radius } = req.body;
   try {
     const nearbyChats = await tdclient.invoke({
       _: "searchChatsNearby",
       location: {
         _: "location",
-        latitude: 0.35853023673222645, 
-        longitude: 35.353716191677066,
+        latitude: latitude,
+        longitude: longitude,
       },
-      radius: 1000,
+      radius: radius,
     });
 
-    console.log("Nearby chats:", nearbyChats);
-
-    const chatIds = 
-    nearbyChats.supergroups_nearby.map(chat => chat.chat_id)
-    ;
-
-    console.log("chat IDDSSSSSSSSSSSSSSSSSSS", chatIds)
-
-    const chatDetailsPromises = chatIds.map(chatId => tdclient.invoke({
-      _: 'getChat',
-      chat_id: chatId,
-    }));
+    const chatIds = nearbyChats.supergroups_nearby.map((chat) => chat.chat_id);
+    const chatDetailsPromises = chatIds.map((chatId) =>
+      tdclient.invoke({
+        _: "getChat",
+        chat_id: chatId,
+      })
+    );
 
     const chats = await Promise.all(chatDetailsPromises);
 
-    console.log('Fetched chats:', chats);
-    res.status(200).json({chatIds: chatIds, groups: chats});
+    res.status(200).json({ chatIds: chatIds, groups: chats });
   } catch (err) {
     res.status(500).json({ error: err });
     throw err;
@@ -212,15 +193,16 @@ const joinChannel = async (req, res) => {
 // The user must be  a mutual contact to be added to chat
 // A mutual contact is a contact that appears in both user's contact list i.e they have saved your(sender's) number and you(sender) has saved theirs
 const addChatUser = async (req, res) => {
+const {chatId, userId, accessHash} = req.body
   try {
     (async function run() {
       await client.connect();
       const result = await client.invoke(
         new Api.messages.AddChatUser({
-          chatId: 4264431115n,
+          chatId: chatId,
           userId: new Api.InputUser({
-            userId: 820499093n,
-            accessHash: -8674062871998001741n,
+            userId: userId,
+            accessHash: accessHash,
           }),
           fwdLimit: 9717987,
         })
