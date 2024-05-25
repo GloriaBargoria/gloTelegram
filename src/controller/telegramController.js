@@ -11,7 +11,7 @@ const { client } = require("../../config");
 const getTelegramLogin = async (req, res) => {
   const { phoneNumber, password } = req.body;
 
-  (async function run() {
+  try {
     await client.connect();
     const result = await client.invoke(
       new Api.auth.SendCode({
@@ -23,8 +23,12 @@ const getTelegramLogin = async (req, res) => {
       })
     );
     console.log(result);
-    return result.phoneCodeHash;
-  })();
+    const phoneCodeHash = result.phoneCodeHash;
+    res.status(200).json({ phoneCodeHash });
+  } catch (error) {
+    console.error("Error while sending code:", error);
+    res.status(500).json({ error: "An error occurred while sending code" });
+  }
 };
 
 
@@ -32,7 +36,7 @@ const getTelegramLogin = async (req, res) => {
 // the phonecodeHash is in the response body of the auth.sendCode request
 const getTelegramOtp = async (req, res) => {
   console.log(req.body);
-  const { code, phoneNumber, phoneCodeHash, password } = req.body;
+  const { code, phoneNumber, phoneCodeHash } = req.body;
   try {
     (async function run() {
       await client.connect();
@@ -42,7 +46,6 @@ const getTelegramOtp = async (req, res) => {
           phoneNumber: phoneNumber,
           phoneCodeHash: phoneCodeHash,
           phoneCode: code,
-          password: password,
         })
       );
       console.log(result);
@@ -56,10 +59,10 @@ const getTelegramOtp = async (req, res) => {
         phone: user.phone,
       });
 
-      // Save newGroup to the database
+      // Save newUser to the database
       await newUser.save();
 
-      res.status(200).json(newGroup);
+      res.status(200).json(newUser);
     })();
   } catch (error) {
     console.log(error);
