@@ -1,6 +1,144 @@
 const GroupModel = require("../models/groupSchema");
 const { client } = require("../../config");
 const { Api } = require("telegram");
+// const { Client } = require("tdl");
+// const { TDLib } = require("tdl-tdlib-addon");
+// const fs = require("fs");
+const tdl = require("tdl");
+const { getTdjson } = require("prebuilt-tdlib");
+
+tdl.configure({ tdjson: getTdjson() });
+
+const apiId = process.env.TELEGRAM_API_ID;
+const apiHash = process.env.TELEGRAM_API_HASH;
+
+const tdclient = tdl.createClient({
+  apiId: apiId,
+  apiHash: apiHash,
+});
+
+const tdLoginUser = async() => {
+  try{
+    await tdclient.connect()
+    await tdclient.login()
+  }catch(err){
+    res.status(500).json({ error: err });
+    throw err;
+  }
+
+}
+
+const tdCreateChat = async (req, res) => {
+  try {
+    await tdclient.connect();
+    await tdclient.login();
+
+    // create supergroup
+    const result = await tdclient.invoke({
+      _: "createNewSupergroupChat",
+      description: "This is a supergroup",
+      title: "Group geolocation geolocation",
+      location: {
+        _: "chatLocation",
+        latitude: 0.35089145199977306,
+        longitude: 35.353372868941264,
+      },
+    });
+
+    console.log("Group created:::::::::::", result);
+    // const chatId = result.chat_id
+    const chatId = result.type.supergroup_id;
+
+    console.log("supergroup id ::::::::::::::", chatId);
+
+    // Set a public username to make the supergroup public
+    const setUsernameResult = await tdclient.invoke({
+      _: "setSupergroupUsername",
+      supergroup_id: chatId,
+      username: "geolocation_unique", // Choose a unique username
+    });
+
+    console.log("Supergroup public:", setUsernameResult);
+
+    const privacyResult = await tdclient.invoke({
+      _: "toggleSupergroupJoinByRequest",
+      supergroup_id: chatId,
+      join_by_request: true,
+    });
+
+    console.log("Join requests enabled:", privacyResult);
+
+    res.status(200).json({ group: result, privacy: privacyResult });
+  } catch (err) {
+    res.status(500).json({ error: err });
+    throw err;
+  }
+};
+
+const tdJoinChatRequest = async (req, res) => {
+  try {
+    await tdclient.connect();
+    await tdclient.login();
+
+    const user = await tdclient.invoke({
+      _: "getMe",
+    });
+
+    console.log("user::::::::::", user);
+
+    const userId = user.id;
+
+    // Send join request
+    const joinRequestResult = await tdclient.invoke({
+      _: "joinChatByInviteLink",
+      invite_link: inviteLink,
+    });
+
+    res.status(200).json({ user: user, join: joinRequestResult });
+  } catch (err) {
+    res.status(err.code).json({ error: err });
+    throw err;
+  }
+};
+
+const tdGetNearbyGroups = async (req, res) => {
+  try {
+    const nearbyChats = await tdclient.invoke({
+      _: "searchChatsNearby",
+      location: {
+        _: "location",
+        latitude: 0.35853023673222645, 
+        longitude: 35.353716191677066,
+      },
+      radius: 1000,
+    });
+
+    console.log("Nearby chats:", nearbyChats);
+
+    const chatIds = 
+    nearbyChats.supergroups_nearby.map(chat => chat.chat_id)
+    ;
+
+    console.log("chat IDDSSSSSSSSSSSSSSSSSSS", chatIds)
+
+    const chatDetailsPromises = chatIds.map(chatId => tdclient.invoke({
+      _: 'getChat',
+      chat_id: chatId,
+    }));
+
+    const chats = await Promise.all(chatDetailsPromises);
+
+    console.log('Fetched chats:', chats);
+    res.status(200).json({chatIds: chatIds, groups: chats});
+  } catch (err) {
+    res.status(500).json({ error: err });
+    throw err;
+  }
+};
+
+const bigIntToLong = (bigIntValue) => {
+  return Number(bigIntValue);
+};
 
 const createGroup = async (req, res) => {
   try {
@@ -13,10 +151,8 @@ const createGroup = async (req, res) => {
     const result = await client.invoke(new Api.channels.CreateChannel(data));
     const accessHash = result.chats[0].accessHash.value;
     const channelId = result.updates[1].channelId.value;
-    console.log(
-      result.chats[0].accessHash.value,
-      result.updates[1].channelId.value
-    );
+
+    console.log(accessHash, channelId);
 
     // Create newGroup with channelId and accessHash
     const newGroup = new GroupModel({ ...data, channelId, accessHash });
@@ -24,11 +160,32 @@ const createGroup = async (req, res) => {
     // Save newGroup to the database
     await newGroup.save();
 
+    // Call requestJoin to make the group private
+    await requestJoin(channelId, accessHash);
+
     res.status(200).json(newGroup);
   } catch (err) {
     console.error("Error creating group:", err);
     res.status(500).json({ error: err });
     throw err;
+  }
+};
+
+const requestJoin = async (channelId, accessHash) => {
+  try {
+    const result = await client.invoke(
+      new Api.channels.ToggleJoinRequest({
+        channel: new Api.InputChannel({
+          channelId: channelId,
+          accessHash: accessHash,
+        }),
+        enabled: true,
+      })
+    );
+    console.log(result); // prints the result
+  } catch (error) {
+    console.error("Error requesting join:", error);
+    throw error;
   }
 };
 
@@ -75,28 +232,37 @@ const addChatUser = async (req, res) => {
   }
 };
 
-
 // Create a group and add yourself in it
 // To add more users in the creation process, pass their ids in the users array
 const createChat = async (req, res) => {
+  const { title } = req.body;
   try {
     (async function run() {
       await client.connect();
       const result = await client.invoke(
         new Api.messages.CreateChat({
           users: [],
-          title: "Another test group",
+          title: title,
         })
       );
-      console.log(result.updates.chatId);
-      console.log(result.updates.chats);
+      console.log(result.updates.updates[1].participants.chatId.value);
+      console.log(result.updates.chats[1].accessHash.value);
+
+      const accessHash = bigIntToLong(result.updates.chats[1].accessHash.value);
+      const channelId = bigIntToLong(
+        result.updates.updates[1].participants.chatId.value
+      );
+      console.log("channel id.........................", channelId);
+      console.log("access ###########################", accessHash);
+
+      await requestJoin(channelId, accessHash);
+
+      res.status(200).json(result);
     })();
   } catch (error) {
     console.log(error);
   }
 };
-
-
 
 // get all groups from DB
 const getAllGroups = async (req, res) => {
@@ -121,20 +287,20 @@ const getNearbyGroups = async (req) => {
       {
         $geoNear: {
           near: {
-            type: 'Point',
+            type: "Point",
             // Coordinates in [longitude, latitude] order
-            coordinates: [longitude, latitude] 
+            coordinates: [longitude, latitude],
           },
           // Calculate distance to each group
-          distanceField: 'distance',
+          distanceField: "distance",
           // Maximum distance in meters
           // Setting it to a hard-coded value to always get groups within 10kn radius
           // Pass it as a query param for a more flexible request eg bigger or smallet distances
-          maxDistance: 10000, 
+          maxDistance: 10000,
           // Use spherical geometry for Earth-like calculations
-          spherical: true 
-        }
-      }
+          spherical: true,
+        },
+      },
     ];
 
     // Perform aggregation query
@@ -142,7 +308,7 @@ const getNearbyGroups = async (req) => {
 
     return nearbyGroups;
   } catch (error) {
-    console.error('Error getting nearby groups:', error);
+    console.error("Error getting nearby groups:", error);
     throw error;
   }
 };
@@ -170,5 +336,9 @@ module.exports = {
   createChat,
   getAllGroups,
   getGroupById,
-  getNearbyGroups
+  getNearbyGroups,
+  tdCreateChat,
+  tdJoinChatRequest,
+  tdGetNearbyGroups,
+  tdLoginUser,
 };
